@@ -1,0 +1,15 @@
+# data is not committed (dataset is linked in the README)
+data/*
+!data/.gitkeep
+
+# python / jupyter
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
