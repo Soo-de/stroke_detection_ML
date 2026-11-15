@@ -27,6 +27,7 @@ LINEAR_MODELS = ("LogisticRegression", "LinearSVC", "RidgeClassifier", "SGDClass
 
 def _split_pipeline(model, X):
     """Final estimator and X passed through the fitted preprocessing steps (samplers skipped)."""
+    model = getattr(model, "best_estimator_", model)  # GridSearchCV / RandomizedSearchCV -> best model
     if not isinstance(model, Pipeline):
         return model, X
     index = X.index
