@@ -1,6 +1,7 @@
 # data is not committed (dataset is linked in the README)
 data/*
 !data/.gitkeep
+results.csv
 
 # python / jupyter
 __pycache__/
