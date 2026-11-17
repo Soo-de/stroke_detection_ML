@@ -32,7 +32,7 @@ def _save(save_prefix, name):
     if save_prefix is not None:
         plt.gcf().savefig(f"{save_prefix}_{name}.png", dpi=200, bbox_inches="tight")
 
-ü
+
 TREE_MODELS = ("RandomForest", "ExtraTrees", "DecisionTree", "GradientBoosting", "XGB", "LGBM",
                "CatBoost")
 LINEAR_MODELS = ("LogisticRegression", "LinearSVC", "RidgeClassifier", "SGDClassifier")
