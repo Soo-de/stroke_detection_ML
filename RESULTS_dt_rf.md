@@ -210,6 +210,60 @@ Random Forest:
 
 **Yorum:** Hiçbir özellik tek başına modeli çökertmiyor (farklar çoğunlukla fold std'si içinde); yaş çıkınca aynı recall için yanlış alarm artıyor (DT 479 → 651, RF 456 → 510). RF'de yaş ve tansiyon kümesi birlikte çıkarılınca belirgin düşüş var (0,161, varsayılan RF 0,169 düzeyi); yani iki grup birbirinin yedeği gibi çalışıyor. DT'de ağacın skoru kesikli olduğu için recall %80'in üstüne çıkabiliyor (AGE satırında 0,863).
 
+## Doğrulama güvenilirliği: bootstrap aralıkları ve iç içe CV (notebook bölüm 8.1, 8.2, RF'de 9.1)
+
+Soru: "tek test bölmesine ve şanslı bir CV seed'ine ne kadar güvenilir?" Model ve eşikler değişmedi; yalnızca belirsizlik ölçüldü. Sonuçlar bu bilgisayarda alındı.
+
+### Test setinin bootstrap aralıkları
+
+Katmanlı bootstrap (inmeli 77 ve inmesiz 804 kişi ayrı çekilir), 2000 örnekleme, seed 42, çalışma eşiğinde sabit model. Aralık = %2,5 - %97,5 yüzdelik dilimi.
+
+| Metrik | DT (eşik 0,053): nokta | DT: %95 aralık | RF (eşik 0,068): nokta | RF: %95 aralık |
+|---|---|---|---|---|
+| Recall | 0,909 | 0,844 - 0,961 | 0,870 | 0,792 - 0,935 |
+| Precision | 0,135 | 0,124 - 0,146 | 0,151 | 0,137 - 0,165 |
+| F1 | 0,236 | 0,217 - 0,253 | 0,258 | 0,234 - 0,281 |
+| PR-AUC | 0,208 | 0,163 - 0,275 | 0,237 | 0,187 - 0,326 |
+| ROC-AUC | 0,742 | 0,684 - 0,792 | 0,766 | 0,714 - 0,815 |
+| Yanlış alarm (804 sağlıklı) | 447 | 419 - 475 | 376 | 348 - 404 |
+
+İki modelin aralıkları birbirini büyük ölçüde örter. En geniş belirsizlik recall ve PR-AUC'dedir (az sayıda inme vakası).
+
+### RF - DT farkı (eşleştirilmiş bootstrap, aynı 2000 örneklem)
+
+| Metrik | Fark (test) | %95 aralık | RF > DT olan örneklem oranı |
+|---|---|---|---|
+| PR-AUC | +0,029 | -0,008 ile +0,084 | 0,944 |
+| ROC-AUC | +0,024 | -0,013 ile +0,062 | 0,896 |
+
+Aralıklar sıfırı içerir: RF'nin üstünlüğü yön olarak tutarlı, ama bu test setiyle kanıtlanmış değil. DT bu karşılaştırma için RF notebook'unda final ayarıyla yeniden eğitilir.
+
+### İç içe (nested) CV
+
+Dış döngü 5 katlı katmanlı (seed 43); her dış katta iç döngü, ekibin 5 katlı CV'siyle küçük bir grid araması (PR-AUC), dengeleme seçeneği dahil. Dış-test katı arama sırasında hiç görülmez.
+
+| | DT | RF |
+|---|---|---|
+| Grid | derinlik 3,4,5,6 x yaprak 40,80,120 x gini/entropy x {yok, class_weight, SMOTE} = 72 aday | derinlik 2,3,4,6 x yaprak 20,40,80 x sqrt x {yok, class_weight, SMOTE} = 36 aday |
+| İç içe CV PR-AUC (dış 5 kat, ort. ± std) | **0,153 ± 0,021** | **0,210 ± 0,067** |
+| İç içe olmayan en iyi CV PR-AUC (bölüm 3) | 0,170 ± 0,010 | 0,221 ± 0,033 |
+| Fark (seçim yanlılığı) | 0,017 | 0,012 |
+| Süre | 6 sn | 59 sn |
+
+Dış kat başına seçilen ve dış-test PR-AUC (dengeleme, derinlik, yaprak, [DT: kriter]):
+
+| Dış kat | DT | DT dış PR-AUC | RF | RF dış PR-AUC |
+|---|---|---|---|---|
+| 1 | yok, 5, 80, gini | 0,143 | class_weight, 6, 20 | 0,174 |
+| 2 | yok, 6, 40, entropy | 0,142 | yok, 2, 40 | 0,211 |
+| 3 | yok, 6, 80, entropy | 0,132 | yok, 6, 40 | 0,137 |
+| 4 | class_weight, 3, 40, entropy | 0,185 | yok, 2, 40 | 0,317 |
+| 5 | class_weight, 6, 120, entropy | 0,164 | yok, 2, 40 | 0,210 |
+
+Okuma: seçim yanlılığı küçüktür (0,01-0,02), dış katlar farklı adaylar seçer (hiperparametre farkları gürültü düzeyinde, bölüm 3 ile uyumlu), SMOTE hiçbir dış katta seçilmedi. RF'nin dış kat std'si (0,067) büyüktür; tek bir bölmeden çıkan sayı bu kadar oynar. Gerçekçi beklenti: DT ~0,15, RF ~0,21 PR-AUC (rastgele düzey 0,087).
+
+Not: RF gridinde `balanced_subsample` ve `max_features=0.5` süre için dışarıda bırakıldı; bu bir genelleme tahmini, yeni bir model arama değil.
+
 ## Final çalıştırma için kontrol
 
 1. `01_data_preprocessing` önce çalışır, `data/train.csv` ve `data/test.csv` üretir (aynı seed → aynı bölme).
