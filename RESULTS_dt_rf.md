@@ -3,7 +3,7 @@
 Bu dosya ekip içi kayıt. Eğitilmiş modeller (`models/*.joblib`) repoya konmaz; final çalıştırmada tüm modeller tek bilgisayarda, aynı ortamda yeniden eğitilir. Burada o çalıştırmada kullanılacak en iyi parametreler, denenen bütün değerler ve bu bilgisayarda alınan sonuçlar var. Final çalıştırmanın sonuçları bunlarla karşılaştırılabilir.
 
 - Notebook'lar: `notebooks/07_model_dt.ipynb`, `notebooks/07_model_rf.ipynb`
-- Kayıt tarihi: 2026-11-24, branch `dt-rf-tuning-evidence` (main `9cdf282` üstünde)
+- Kayıt tarihi: 2026-11-24, branch `dt-rf-tuning-evidence` (main `9cdf282` üstünde); tek hasta açıklaması ve özellik çıkarma bölümü branch `dt-rf-explainability` ile eklendi
 - Denenen her adayın tam sonucu: `figures/dt_grid_results.csv` (432 aday), `figures/rf_grid_results.csv` (392 aday)
 
 ## Ortak ayarlar
@@ -174,6 +174,41 @@ max_features: **sqrt 0,221** ± 0,033, 0.5 0,211 ± 0,019.
 | 0,870 | 0,151 | 0,258 | 0,766 | 0,237 | 67 / 77 | 376 / 804 |
 
 CV OOF (havuzlanmış) PR-AUC: 0,190.
+
+## Tek hasta açıklaması ve özellik çıkarma (notebook bölüm 10.1 ve 10.2)
+
+Hasta seçimi: çalışma eşiğinde, test setindeki yakalanan ve kaçırılan inme vakalarının her biri için skoru grup medyanına en yakın hasta (indeks = `X_test` satır konumu). Bölüm 10'daki eski LIME hastası en yüksek skorlu hastaydı: DT'de #75 (inme, yakalanmış), RF'de #438 (**inme yok**, yanlış alarm).
+
+| | Yakalanan (doğru pozitif) | Kaçırılan (yanlış negatif) |
+|---|---|---|
+| DT, eşik 0,053 | #79, skor 0,131: 64 yaş, hipertansiyon öyküsü, diyabet, sistolik 147. Yaprak: 214 kişi, inme oranı %13. LIME: yaş > 57, hipertansiyon öyküsü, sistolik > 144 | #138, skor 0,021: 46 yaş, hipertansiyon öyküsü yok, 120/84. Yaprak: 1162 kişi, inme oranı %2,1; kaçırılan 7 vakanın hepsi bu yaprakta. LIME: hipertansiyon öyküsü yok, yaş 42-49 |
+| RF, eşik 0,068 | #300, skor 0,135: 55 yaş, hipertansiyon öyküsü, sistolik 155, günde 9 sigara. LIME: sistolik > 144, hipertansiyon öyküsü | #139, skor 0,050: 51 yaş, hipertansiyon öyküsü yok, 102/71,5. LIME: hipertansiyon öyküsü yok, sistolik ≤ 117,5. Kaçırılan 10 vakanın skorları 0,042-0,068 (eşiğe yakın) |
+
+Özellik çıkarma: final yapılandırma, hiperparametreler yeniden aranmadan, aynı 5 katlı CV'de. Çıkarma kodlamadan sonra ve türetilmiş sütunlarla birlikte yapılır (tansiyon kümesi = SYSBP, DIABP, pulse_pressure, mean_arterial_pressure, bp_stage_*; eşlik eden hastalık = comorbidity_count, DIABETES, PREVHYP, PREVCHD). Eşik her satırda %80 recall kuralıyla OOF'tan yeniden seçilir.
+
+Decision Tree (rastgele düzey 0,087):
+
+| Çıkarılan | CV PR-AUC | ROC-AUC | Eşik | Recall (OOF) | Precision (OOF) | 1000 kişide yanlış alarm |
+|---|---|---|---|---|---|---|
+| Hiçbiri (final) | 0,170 ± 0,010 | 0,689 | 0,053 | 0,804 | 0,127 | 479 |
+| AGE | 0,161 ± 0,011 | 0,652 | 0,047 | 0,863 | 0,103 | 651 |
+| AGE + comorbidity_count (bileşenler kalır) | 0,150 ± 0,022 | 0,623 | 0,051 | 0,807 | 0,103 | 608 |
+| AGE + eşlik eden hastalık (4 sütun) | 0,139 ± 0,021 | 0,594 | 0,041 | 0,820 | 0,096 | 670 |
+| Tansiyon kümesi | 0,149 ± 0,007 | 0,680 | 0,053 | 0,804 | 0,127 | 479 |
+| AGE + tansiyon kümesi | 0,131 ± 0,021 | 0,629 | 0,055 | 0,807 | 0,113 | 552 |
+
+Random Forest:
+
+| Çıkarılan | CV PR-AUC | ROC-AUC | Eşik | Recall (OOF) | Precision (OOF) | 1000 kişide yanlış alarm |
+|---|---|---|---|---|---|---|
+| Hiçbiri (final) | 0,221 ± 0,033 | 0,712 | 0,068 | 0,801 | 0,132 | 456 |
+| AGE | 0,195 ± 0,033 | 0,681 | 0,059 | 0,801 | 0,120 | 510 |
+| AGE + comorbidity_count (bileşenler kalır) | 0,191 ± 0,030 | 0,675 | 0,060 | 0,801 | 0,115 | 536 |
+| AGE + eşlik eden hastalık (4 sütun) | 0,189 ± 0,038 | 0,672 | 0,062 | 0,801 | 0,116 | 533 |
+| Tansiyon kümesi | 0,192 ± 0,017 | 0,713 | 0,074 | 0,801 | 0,139 | 430 |
+| AGE + tansiyon kümesi | 0,161 ± 0,013 | 0,664 | 0,061 | 0,801 | 0,113 | 544 |
+
+**Yorum:** Hiçbir özellik tek başına modeli çökertmiyor (farklar çoğunlukla fold std'si içinde); yaş çıkınca aynı recall için yanlış alarm artıyor (DT 479 → 651, RF 456 → 510). RF'de yaş ve tansiyon kümesi birlikte çıkarılınca belirgin düşüş var (0,161, varsayılan RF 0,169 düzeyi); yani iki grup birbirinin yedeği gibi çalışıyor. DT'de ağacın skoru kesikli olduğu için recall %80'in üstüne çıkabiliyor (AGE satırında 0,863).
 
 ## Final çalıştırma için kontrol
 
